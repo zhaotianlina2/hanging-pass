@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>form. — The Hanging Pass（悬挂工牌）</title>
+<style>
+  :root{
+    --bg:#ececea;
+    --wm:#e2e2df;
+    --ink:#232529;
+    --gray:#9a9ea3;
+    --gray2:#b9bcc0;
+    --salmon:#ee8265;
+    --ribbon:#e8602e;
+    --ribbon-dark:#c94f22;
+    --holoA:#b8c6e8; --holoB:#cbb3e6; --holoC:#a9d4e6; --holoD:#e6c9b8;
+    --hx:50%;
+    --shx:0px;
+    --gap:150px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background:var(--bg);
+    font-family:"Helvetica Neue",Helvetica,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+    color:var(--ink);
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:none;
+  }
+
+  /* ---------- 巨型水印 ---------- */
+  #watermark{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:"Arial Black","Avenir Heavy",Arial,sans-serif;
+    font-weight:900;
+    font-size:min(30vw,560px);
+    letter-spacing:-0.02em;
+    color:var(--wm);
+    pointer-events:none;
+    z-index:0;
+    transform:translate(calc(var(--mx,0)*1px),calc(var(--my,0)*1px));
+    transition:opacity .45s;
+  }
+  #watermark span{opacity:1;transition:opacity .35s;}
+  #watermark .alt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;}
+  body.mode-layers #watermark .a{opacity:0;}
+  body.mode-layers #watermark .alt{opacity:1;}
+
+  /* ---------- 页面四角文字 ---------- */
+  .micro{font-size:10px;letter-spacing:.22em;color:var(--gray);text-transform:uppercase;line-height:1.7;}
+  header{
+    position:fixed;top:34px;left:44px;right:44px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    z-index:5;pointer-events:none;
+  }
+  .hgroup{display:flex;align-items:center;gap:18px;}
+  .hgroup .line{width:54px;height:1px;background:#c6c8ca;}
+  .logo{font-size:26px;font-weight:800;letter-spacing:-0.03em;color:var(--ink);}
+  .logo em{font-style:normal;color:var(--salmon);}
+  .hswap{position:relative;}
+  .hswap>div{transition:opacity .4s;}
+  .hswap .b{position:absolute;left:0;top:0;opacity:0;white-space:nowrap;}
+  body.mode-layers .hswap .a{opacity:0;}
+  body.mode-layers .hswap .b{opacity:1;}
+
+  .corner-left{position:fixed;left:44px;top:24%;z-index:5;display:flex;gap:14px;align-items:flex-start;pointer-events:none;}
+  .corner-left .star{font-size:20px;color:#8f9398;line-height:1;}
+  .corner-right{position:fixed;right:44px;top:29%;z-index:5;text-align:right;pointer-events:none;}
+  .corner-right .fig{margin-bottom:26px;}
+  .corner-right .fig i{display:inline-block;width:26px;height:1px;background:#c6c8ca;margin-top:10px;}
+
+  .caption-bl{position:fixed;left:44px;bottom:40px;z-index:5;pointer-events:none;}
+  .caption-br{position:fixed;right:44px;bottom:40px;z-index:5;pointer-events:none;text-align:right;}
+
+  /* ---------- 舞台 ---------- */
+  #stage{
+    position:fixed;inset:0;z-index:10;
+    perspective:1500px;
+    cursor:default;
+  }
+  #scaler{position:absolute;inset:0;transform:scale(var(--sc,1));transform-origin:50% 0;}
+
+  #ribbonSvg{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}
+
+  /* 挂扣 */
+  #clip{position:absolute;left:0;top:0;pointer-events:none;z-index:12;}
+  #clip svg{display:block;overflow:visible;}
+
+  /* ---------- 工牌 ---------- */
+  #swing{
+    position:absolute;left:0;top:0;
+    transform-origin:150px 26px; /* 挂孔位置 */
+    z-index:11;
+  }
+  #flip3d{
+    width:300px;height:440px;position:relative;
+    transform-style:preserve-3d;
+    cursor:grab;
+  }
+  #flip3d:active{cursor:grabbing;}
+  .face{
+    position:absolute;inset:0;border-radius:26px;
+    backface-visibility:hidden;-webkit-backface-visibility:hidden;
+    background:#17191d;
+    box-shadow:0 30px 60px rgba(30,32,36,.28), 0 4px 12px rgba(30,32,36,.18);
+    overflow:hidden;
+  }
+  .face.back{transform:rotateY(180deg) translateZ(6px);}
+  .face.front{transform:translateZ(6px);}
+  /* 卡片厚度侧边（翻面/倾斜时可见） */
+  .eg{position:absolute;background:#2e3237;}
+  .eg.v{width:12px;height:440px;left:50%;top:0;margin-left:-6px;background:linear-gradient(90deg,#43474d,#23262a);}
+  .eg.h{width:300px;height:12px;top:50%;left:0;margin-top:-6px;background:linear-gradient(180deg,#43474d,#23262a);}
+  .eg.l{transform:rotateY(-90deg) translateZ(150px);}
+  .eg.r{transform:rotateY(90deg) translateZ(150px);}
+  .eg.t{transform:rotateX(90deg) translateZ(220px);}
+  .eg.b{transform:rotateX(-90deg) translateZ(220px);}
+  /* 挂孔 */
+  .hole{
+    position:absolute;left:50%;top:14px;width:24px;height:24px;margin-left:-12px;border-radius:50%;
+    background:#0b0c0e;
+    box-shadow:0 0 0 3px #33363c,0 0 0 4.5px #85898f, inset 0 3px 4px rgba(255,255,255,.14), 0 0 0 6px rgba(255,255,255,.03);
+  }
+  /* 玻璃斜光 */
+  .sheen{
+    position:absolute;inset:-30%;pointer-events:none;
+    background:linear-gradient(115deg,transparent 42%,rgba(255,255,255,.075) 50%,transparent 60%);
+    transform:translateX(var(--shx));
+  }
+
+  /* --- 正面 --- */
+  .front .topline{
+    position:absolute;top:58px;left:26px;right:26px;
+    display:flex;justify-content:space-between;
+    font-size:10px;letter-spacing:.2em;color:#8d9196;
+  }
+  .front .topline b{color:#c8cbce;font-weight:500;}
+  .front .brand{position:absolute;top:92px;left:26px;}
+  .front .brand h1{font-size:64px;font-weight:800;letter-spacing:-0.04em;color:var(--salmon);line-height:1;}
+  .front .brand p{margin-top:10px;font-size:9.5px;letter-spacing:.24em;color:#83878c;}
+  .front .member{position:absolute;top:246px;left:26px;}
+  .front .member .label{font-size:9px;letter-spacing:.22em;color:#7d8186;margin-bottom:10px;}
+  .front .member .name{font-size:30px;font-weight:500;color:#ecedef;letter-spacing:-0.01em;}
+  .front .member .role{margin-top:9px;font-size:9.5px;letter-spacing:.2em;color:#9a9ea3;display:flex;align-items:center;gap:7px;}
+  .front .member .role i{width:5px;height:5px;border-radius:50%;background:var(--salmon);display:inline-block;}
+  .holoF{
+    position:absolute;right:22px;top:230px;
+    font-size:130px;font-weight:800;line-height:1;
+    background:linear-gradient(120deg,var(--holoA),var(--holoB) 28%,var(--holoC) 52%,var(--holoD) 76%,var(--holoA));
+    background-size:280% 280%;
+    background-position:var(--hx) 50%;
+    -webkit-background-clip:text;background-clip:text;
+    color:transparent;
+    filter:saturate(1.25);
+    transition:filter .4s;
+  }
+  .front .chip{
+    position:absolute;right:26px;top:374px;
+    width:38px;height:38px;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:18px;color:#202226;
+    background:linear-gradient(135deg,#dfe6f2,#cdbfe8 55%,#bcd8ea);
+    box-shadow:inset 0 1px 2px rgba(255,255,255,.5);
+  }
+  .front .access{position:absolute;left:26px;bottom:64px;}
+  .front .access b{display:block;font-size:15px;letter-spacing:.06em;color:#e8eaec;font-weight:700;}
+  .front .access span{display:block;margin-top:6px;font-size:8.5px;letter-spacing:.18em;color:#7c8085;}
+  .front .bottomrow{
+    position:absolute;left:26px;right:26px;bottom:24px;
+    display:flex;justify-content:space-between;align-items:flex-end;
+  }
+  .front .memberno span{display:block;font-size:8px;letter-spacing:.2em;color:#767a7f;margin-bottom:5px;}
+  .front .memberno b{font-size:15px;font-weight:600;color:#dfe1e4;letter-spacing:.04em;}
+  .front .code{text-align:right;}
+  .front .code svg{display:block;height:24px;}
+  .front .code span{display:block;margin-top:4px;font-size:7px;letter-spacing:.2em;color:#6f7378;}
+
+  /* --- 背面 --- */
+  .back{background:#121417;}
+  .back .backlabel{position:absolute;top:34px;left:26px;font-size:9.5px;letter-spacing:.24em;color:#7d8186;}
+  .back .holoF{top:120px;right:auto;left:26px;font-size:120px;}
+  .back h2{position:absolute;left:26px;top:262px;font-size:34px;font-weight:600;color:#ecedef;line-height:1.25;letter-spacing:-0.01em;}
+  .back h2 em{font-style:normal;color:var(--salmon);}
+  .back .fine{position:absolute;left:26px;bottom:52px;font-size:8px;letter-spacing:.14em;color:#6c7075;line-height:1.9;}
+  .back .backbrand{position:absolute;left:26px;bottom:24px;font-size:15px;font-weight:800;color:#ecedef;letter-spacing:-0.02em;}
+  .back .plus{
+    position:absolute;right:26px;bottom:24px;width:34px;height:34px;border-radius:10px;
+    border:1px solid #33363c;background:transparent;color:#9a9ea3;font-size:18px;cursor:pointer;
+  }
+  .back .plus:hover{border-color:#5a5e64;color:#c8cbce;}
+
+  /* ---------- 材质分层模式 ---------- */
+  #explodeRoot{
+    position:absolute;left:50%;top:50%;z-index:20;
+    width:0;height:0;
+    opacity:0;pointer-events:none;
+    transition:opacity .45s;
+    transform-style:preserve-3d;
+  }
+  body.mode-layers #explodeRoot{opacity:1;pointer-events:auto;}
+  #explodeInner{
+    position:absolute;left:0;top:0;
+    transform-style:preserve-3d;
+    transform:rotateY(-16deg) rotateX(3deg);
+  }
+  .layer{
+    position:absolute;left:-132px;top:-208px;
+    width:264px;height:396px;border-radius:22px;
+    transform-style:preserve-3d;
+    transition:transform .5s cubic-bezier(.22,.9,.3,1.1), filter .3s, opacity .3s;
+    cursor:pointer;
+  }
+  .layer .lay{
+    position:absolute;inset:0;border-radius:22px;overflow:hidden;
+    box-shadow:0 24px 50px rgba(30,32,36,.22);
+  }
+  .layer .num{
+    position:absolute;left:50%;bottom:-38px;transform:translateX(-50%);
+    font-size:10px;letter-spacing:.2em;color:#a6a9ad;
+  }
+  .layer.dim{filter:brightness(1.35) opacity(.45);}
+  .layer.active .lay{outline:1.5px solid rgba(238,130,101,.65);outline-offset:4px;}
+
+  /* 每层内容 */
+  .lay-01{background:#141619;}
+  .lay-01 .mirror{position:absolute;inset:0;transform:scaleX(-1);}
+  .lay-02{background:linear-gradient(150deg,#232629,#1a1c1f 60%,#212428);}
+  .lay-03{background:#17191d;}
+  .lay-04{background:rgba(240,242,244,.14);backdrop-filter:blur(1px);border:1px solid rgba(255,255,255,.35);}
+  .lay-05{background:rgba(238,240,242,.16);border:1px solid rgba(255,255,255,.5);}
+  .lay-05::after{content:"";position:absolute;inset:0;border-radius:22px;
+    background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.28) 50%,transparent 60%);}
+  .lay .hole{box-shadow:0 0 0 3px #45484e,0 0 0 4.5px #9a9ea3;}
+  .lay-04 .hole,.lay-05 .hole{box-shadow:0 0 0 3px rgba(255,255,255,.6);}
+
+  /* 分层模式下隐藏悬挂件 */
+  body.mode-layers #swing,body.mode-layers #clip,body.mode-layers #ribbonSvg{opacity:0;pointer-events:none;}
+  body.mode-layers .corner-right{opacity:0;}
+  .corner-right{transition:opacity .4s;}
+  #swing,#clip,#ribbonSvg{transition:opacity .35s;}
+
+  /* ---------- 右侧材质面板 ---------- */
+  #panel{
+    position:fixed;right:44px;top:170px;width:280px;z-index:35;
+    opacity:0;transform:translateX(24px);pointer-events:none;
+    transition:opacity .45s,transform .45s;
+  }
+  body.mode-layers #panel{opacity:1;transform:none;pointer-events:auto;}
+  #panel .cap{font-size:9px;letter-spacing:.22em;color:#a6a9ad;margin-bottom:14px;}
+  #panel h3{font-size:22px;font-weight:600;color:var(--ink);letter-spacing:.02em;}
+  #panel .sub{margin-top:8px;font-size:10px;letter-spacing:.14em;color:#9a9ea3;}
+  #panel ol{list-style:none;margin-top:26px;border-top:1px solid #d8d8d6;}
+  #panel ol li{
+    display:flex;gap:14px;align-items:baseline;
+    padding:11px 2px;border-bottom:1px solid #d8d8d6;
+    font-size:13px;color:#5c6065;cursor:pointer;
+    transition:color .2s;
+  }
+  #panel ol li .no{font-size:9px;letter-spacing:.12em;color:#b0b3b7;width:20px;}
+  #panel ol li .en{margin-left:auto;font-size:8.5px;letter-spacing:.18em;color:#b6b9bd;}
+  #panel ol li:hover{color:var(--ink);}
+  #panel ol li.on{color:var(--ink);font-weight:600;}
+  #panel ol li.on .no{color:var(--salmon);}
+  #panel .desc{margin-top:22px;}
+  #panel .desc .en{font-size:8.5px;letter-spacing:.2em;color:#b0b3b7;margin-bottom:8px;}
+  #panel .desc p{font-size:12px;color:#5c6065;line-height:1.8;}
+  #panel .sliderbox{margin-top:26px;}
+  #panel .sliderbox .lab{display:flex;justify-content:space-between;font-size:10px;color:#7c8085;letter-spacing:.1em;margin-bottom:10px;}
+  #panel input[type=range]{
+    width:100%;appearance:none;-webkit-appearance:none;height:2px;background:#cfcdc9;outline:none;border-radius:2px;
+  }
+  #panel input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--ink);border:3px solid var(--bg);box-shadow:0 0 0 1px #b9bcc0;cursor:pointer;
+  }
+  #panel .note{margin-top:10px;font-size:9px;letter-spacing:.12em;color:#b0b3b7;}
+
+  /* ---------- 底部 Dock ---------- */
+  #dockWrap{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:40;text-align:center;}
+  #hint{
+    font-size:11.5px;letter-spacing:.14em;color:#a0a4a8;margin-bottom:14px;
+    transition:opacity .3s;
+  }
+  #dock{
+    display:inline-flex;align-items:center;gap:8px;
+    background:rgba(255,255,255,.82);backdrop-filter:blur(10px);
+    border-radius:999px;padding:10px 14px;
+    box-shadow:0 12px 34px rgba(35,37,41,.14),0 1px 0 rgba(255,255,255,.6) inset;
+  }
+  .dot{
+    width:17px;height:17px;border-radius:50%;cursor:pointer;border:none;
+    transition:transform .2s;
+  }
+  .dot:hover{transform:scale(1.15);}
+  .dot.on{box-shadow:0 0 0 2.5px #fff,0 0 0 4px var(--dc,#232529);}
+  .dot-0{background:#ee8265;--dc:#ee8265;}
+  .dot-1{background:#c9d63c;--dc:#b5c22e;}
+  .dot-2{background:#2b2e33;--dc:#2b2e33;}
+  .dockline{width:1px;height:18px;background:#dededc;margin:0 4px;}
+  .ic{
+    width:34px;height:34px;border:none;border-radius:50%;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;background:transparent;
+    color:#7c8085;transition:background .2s,color .2s;
+  }
+  .ic:hover{background:#ededeb;color:#3a3d42;}
+  .ic.on{background:#232529;color:#fff;}
+  .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+</style>
+</head>
+<body>
+
+<div id="watermark"><span class="a">PLAY.</span><span class="alt b">LAYERS.</span></div>
+
+<header>
+  <div class="hgroup hswap">
+    <div class="a" style="display:flex;align-items:center;gap:18px;">
+      <div class="logo">form<em>.</em></div><div class="line"></div><div class="micro">Object<br>Studies</div>
+    </div>
+    <div class="b" style="display:flex;align-items:center;gap:18px;">
+      <div class="logo">form<em>.</em></div><div class="line"></div><div class="micro">Material<br>Studies</div>
+    </div>
+  </div>
+  <div class="hgroup hswap">
+    <div class="a" style="display:flex;align-items:center;gap:18px;">
+      <div class="micro" style="text-align:right;">The Hanging Pass</div><div class="line"></div><div class="micro">Edition 001 / 2026</div>
+    </div>
+    <div class="b" style="display:flex;align-items:center;gap:18px;">
+      <div class="micro" style="text-align:right;">Inside the Object</div><div class="line"></div><div class="micro">05 Layers / Fig. 001</div>
+    </div>
+  </div>
+</header>
+
+<div class="corner-left">
+  <span class="star">✳</span>
+  <div class="micro">Objects<br>With Feeling.</div>
+</div>
+
+<div class="corner-right">
+  <div class="fig micro">Fig. 001<br><i></i></div>
+  <div class="micro">The Everyday<br>Identity Object</div>
+</div>
+
+<div class="caption-bl micro hswap">
+  <div class="a">01 / The Hanging Pass</div>
+  <div class="b">02 / Through the Thickness</div>
+</div>
+<div class="caption-br micro hswap">
+  <div class="a">Designed to be played with.</div>
+  <div class="b">Five Layers. One Identity.</div>
+</div>
+
+<div id="stage">
+  <div id="scaler">
+    <svg id="ribbonSvg"></svg>
+    <div id="clip">
+      <svg width="80" height="120" viewBox="-40 -10 80 120">
+        <defs>
+          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#7d838b"/><stop offset=".45" stop-color="#d6dade"/>
+            <stop offset=".6" stop-color="#9aa0a7"/><stop offset="1" stop-color="#666c73"/>
+          </linearGradient>
+        </defs>
+        <rect x="-15" y="0" width="30" height="22" rx="5" fill="#2c2f34"/>
+        <rect x="-15" y="0" width="30" height="7" rx="3.5" fill="#3a3e44"/>
+        <rect x="-7" y="24" width="14" height="26" rx="6" fill="url(#metal)"/>
+        <path d="M -9 50 h 18 v 12 a 9 13 0 1 1 -18 0 z" fill="none" stroke="url(#metal)" stroke-width="5"/>
+        <circle cx="0" cy="74" r="9" fill="none" stroke="#a8adb3" stroke-width="4"/>
+      </svg>
+    </div>
+
+    <div id="swing">
+      <div id="flip3d">
+        <div class="eg v l"></div><div class="eg v r"></div>
+        <div class="eg h t"></div><div class="eg h b"></div>
+        <div class="face front">
+          <div class="hole"></div>
+          <div class="topline"><span>— <b>CREATIVE STUDIO</b></span><span>EDITION 01</span></div>
+          <div class="brand"><h1>form.</h1><p>IDEAS TAKE SHAPE HERE.</p></div>
+          <div class="member">
+            <div class="label">STUDIO MEMBER</div>
+            <div class="name">Alex Morgan</div>
+            <div class="role"><i></i>DESIGNER</div>
+          </div>
+          <div class="holoF">F</div>
+          <div class="chip">F</div>
+          <div class="access"><b>FULL ACCESS</b><span>A PLACE FOR CURIOUS MINDS</span></div>
+          <div class="bottomrow">
+            <div class="memberno"><span>MEMBER NO.</span><b>F—001</b></div>
+            <div class="code"><svg id="barcode" width="86" height="24"></svg><span>AP / DESIGN / 2026</span></div>
+          </div>
+          <div class="sheen"></div>
+        </div>
+        <div class="face back">
+          <div class="hole"></div>
+          <div class="backlabel">FORM MEMBERSHIP</div>
+          <div class="holoF">F</div>
+          <h2>Good things<br><em>take shape.</em></h2>
+          <div class="fine">Voices &nbsp;·&nbsp; People &nbsp;·&nbsp; Facilities<br>Consistency at work</div>
+          <div class="backbrand">form.</div>
+          <button class="plus">+</button>
+          <div class="sheen"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="explodeRoot"><div id="explodeInner">
+      <div class="layer" data-i="0"><div class="lay lay-01"><div class="mirror">
+          <div class="backlabel" style="position:absolute;top:30px;left:24px;font-size:9px;letter-spacing:.22em;color:#7d8186;">FORM MEMBERSHIP</div>
+          <h2 style="position:absolute;left:24px;top:236px;font-size:31px;font-weight:600;color:#ecedef;line-height:1.25;">Good things<br><em style="font-style:normal;color:var(--salmon);">take shape.</em></h2>
+          <div style="position:absolute;left:24px;bottom:48px;font-size:14px;font-weight:800;color:#ecedef;">form.</div>
+      </div></div><div class="num">01</div></div>
+      <div class="layer" data-i="1"><div class="lay lay-02"></div><div class="num">02</div></div>
+      <div class="layer" data-i="2"><div class="lay lay-03">
+          <div class="topline" style="position:absolute;top:52px;left:24px;right:24px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.18em;color:#8d9196;"><span>— <b style="color:#c8cbce;font-weight:500;">CREATIVE STUDIO</b></span><span>EDITION 01</span></div>
+          <div style="position:absolute;top:84px;left:24px;"><div style="font-size:56px;font-weight:800;letter-spacing:-0.04em;color:var(--salmon);line-height:1;">form.</div><div style="margin-top:9px;font-size:8.5px;letter-spacing:.22em;color:#83878c;">IDEAS TAKE SHAPE HERE.</div></div>
+          <div style="position:absolute;top:222px;left:24px;"><div style="font-size:8px;letter-spacing:.2em;color:#7d8186;margin-bottom:9px;">STUDIO MEMBER</div><div style="font-size:26px;font-weight:500;color:#ecedef;">Alex Morgan</div><div style="margin-top:8px;font-size:8.5px;letter-spacing:.18em;color:#9a9ea3;">• DESIGNER</div></div>
+          <div style="position:absolute;left:24px;bottom:56px;"><b style="display:block;font-size:13px;letter-spacing:.06em;color:#e8eaec;">FULL ACCESS</b><span style="display:block;margin-top:5px;font-size:7.5px;letter-spacing:.16em;color:#7c8085;">A PLACE FOR CURIOUS MINDS</span></div>
+          <div style="position:absolute;left:24px;right:24px;bottom:22px;display:flex;justify-content:space-between;align-items:flex-end;"><div><span style="display:block;font-size:7px;letter-spacing:.18em;color:#767a7f;margin-bottom:4px;">MEMBER NO.</span><b style="font-size:13px;color:#dfe1e4;">F—001</b></div><svg class="minibc" width="70" height="20"></svg></div>
+      </div><div class="num">03</div></div>
+      <div class="layer" data-i="3"><div class="lay lay-04">
+          <div class="hole" style="background:rgba(255,255,255,.25);"></div>
+          <div style="position:absolute;right:18px;top:210px;font-size:112px;font-weight:800;line-height:1;background:linear-gradient(120deg,var(--holoA),var(--holoB) 30%,var(--holoC) 55%,var(--holoD));background-size:260% 260%;background-position:var(--hx) 50%;-webkit-background-clip:text;background-clip:text;color:transparent;">F</div>
+      </div><div class="num">04</div></div>
+      <div class="layer" data-i="4"><div class="lay lay-05"><div class="hole" style="background:rgba(255,255,255,.3);"></div></div><div class="num">05</div></div>
+    </div></div>
+  </div>
+</div>
+
+<aside id="panel">
+  <div class="cap">Card Construction</div>
+  <h3>看见卡片的厚度</h3>
+  <div class="sub">沿厚度展开 · 点击一层仔细看</div>
+  <ol id="layerList">
+    <li data-i="0" class="on"><span class="no">01</span>背面印刷<span class="en">Back Print</span></li>
+    <li data-i="1"><span class="no">02</span>石墨卡芯<span class="en">Graphite Core</span></li>
+    <li data-i="2"><span class="no">03</span>正面印刷<span class="en">Face Print</span></li>
+    <li data-i="3"><span class="no">04</span>局部镭射<span class="en">Holo Foil</span></li>
+    <li data-i="4"><span class="no">05</span>透明保护膜<span class="en">Film</span></li>
+  </ol>
+  <div class="desc">
+    <div class="en" id="descEn">FACE PRINT</div>
+    <p id="descTxt">冷石墨与暖橙构成卡面，承载名称、身份和编号。</p>
+  </div>
+  <div class="sliderbox">
+    <div class="lab"><span>层间距</span><span id="gapVal">150</span></div>
+    <input type="range" id="gapRange" min="60" max="260" value="150">
+    <div class="note">材质结构示意 · 厚度与间距非实际比例</div>
+  </div>
+</aside>
+
+<div id="dockWrap">
+  <div id="hint">轻移鼠标 · 拖动回摆 · 点击翻面</div>
+  <div id="dock">
+    <button class="dot dot-0 on" data-t="0" title="挂绳配色 · 暖橙"></button>
+    <button class="dot dot-1" data-t="1" title="挂绳配色 · 苔绿"></button>
+    <button class="dot dot-2" data-t="2" title="挂绳配色 · 石墨"></button>
+    <div class="dockline"></div>
+    <button class="ic" id="btnRehang" title="重新挂上">
+      <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.5 5.8"/><path d="M4 18v-5h5"/></svg>
+    </button>
+    <button class="ic" id="btnWave" title="自动摆动">
+      <svg viewBox="0 0 24 24"><path d="M2 12c2.5-5 5-5 7.5 0s5 5 7.5 0 3.5-3.5 5-1"/></svg>
+    </button>
+    <button class="ic" id="btnSpark" title="镭射高光">
+      <svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>
+    </button>
+    <button class="ic" id="btnLayers" title="材质分层">
+      <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5" opacity=".45"/></svg>
+    </button>
+    <button class="ic" id="btnReset" title="回正视角">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 18v-5h-5"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+window.addEventListener('error',function(e){window.__topErr=(e.error&&e.error.stack)||e.message;});
+/* ================= 基础工具 ================= */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const stage=$('#stage'),scaler=$('#scaler'),swing=$('#swing'),flip3d=$('#flip3d'),
+      clip=$('#clip'),ribbonSvg=$('#ribbonSvg'),wm=$('#watermark');
+
+/* ================= 条码生成（固定随机种子，模拟真实条码） ================= */
+function genBarcode(svg,w,h){
+  let x=0,r=7;const rnd=()=>(r=(r*16807)%2147483647)/2147483647;
+  let s='';
+  while(x<w-2){const bw=1+Math.floor(rnd()*3);const gap=1+Math.floor(rnd()*3);
+    s+=`<rect x="${x}" y="0" width="${bw}" height="${h}" fill="#22252a"/>`;x+=bw+gap;}
+  svg.innerHTML=s;
+}
+genBarcode($('#barcode'),86,24);
+$$('.minibc').forEach(el=>genBarcode(el,70,20));
+
+/* ================= 物理状态 ================= */
+const S={
+  ang:-0.5, angV:0,           /* 摆角与角速度 */
+  flip:0, flipV:0, flipT:0,    /* 翻面 */
+  tiltX:0, tiltY:0,            /* 鼠标微倾 */
+  rope:0, ropeV:0, ropeT:380,  /* 绳长弹簧（重新挂上时回弹） */
+  drag:false, wave:false, spark:false,
+  mx:0.5, my:0.5, mouseMoved:false, /* 鼠标归一化 */
+  grabOff:0,
+  lastPx:0,lastPy:0,lastT:0,
+  ribbon:['#e8602e','#c94f22'],
+};
+let ropeBase=380;
+function layout(){
+  const sc=clamp(innerHeight/940,0.62,1);
+  document.documentElement.style.setProperty('--sc',sc);
+  ropeBase=380;
+  S.ropeT=ropeBase;
+  if(!S.rope){S.rope=ropeBase*0.42;}  /* 入场：从收紧状态掉落回弹 */
+}
+addEventListener('resize',layout);layout();
+
+/* ================= 挂绳绘制 ================= */
+const RIBBON_W1=27,RIBBON_W2=18;
+function drawRibbon(pivot,crimp){
+  const dx=crimp.x-pivot.x,dy=crimp.y-pivot.y,len=Math.hypot(dx,dy)||1;
+  const px=-dy/len,py=dx/len;
+  const slack=Math.max(0,ropeBase*0.96-S.rope);      /* 绳子收紧不足时打弯 */
+  const bow=clamp(-S.angV*26,-46,46)+slack*0.9;
+  const A={x:pivot.x+px*RIBBON_W1,y:pivot.y+py*RIBBON_W1},
+        B={x:crimp.x+px*RIBBON_W2,y:crimp.y+py*RIBBON_W2},
+        C={x:crimp.x-px*RIBBON_W2,y:crimp.y-py*RIBBON_W2},
+        D={x:pivot.x-px*RIBBON_W1,y:pivot.y-py*RIBBON_W1};
+  const M1={x:(A.x+B.x)/2+px*bow,y:(A.y+B.y)/2+py*bow},
+        M2={x:(D.x+C.x)/2+px*bow,y:(D.y+C.y)/2+py*bow};
+  const textPathStartT=clamp((0-pivot.y)/((crimp.y-pivot.y)||1),0,0.9);
+  const tsx=pivot.x+textPathStartT*(crimp.x-pivot.x),
+        tmy=(pivot.y+crimp.y)/2+py*bow, tmx=(pivot.x+crimp.x)/2+px*bow;
+  const textPath=`M ${tsx} 0 Q ${tmx} ${tmy} ${crimp.x} ${crimp.y}`;
+  ribbonSvg.setAttribute('width',innerWidth);ribbonSvg.setAttribute('height',innerHeight);
+  ribbonSvg.innerHTML=`
+    <defs>
+      <linearGradient id="rg" gradientUnits="userSpaceOnUse" x1="${pivot.x}" y1="${pivot.y}" x2="${crimp.x}" y2="${crimp.y}">
+        <stop offset="0" stop-color="${S.ribbon[0]}"/><stop offset="1" stop-color="${S.ribbon[1]}"/>
+      </linearGradient>
+      <path id="rp" d="${textPath}" fill="none"/>
+    </defs>
+    <path d="M ${A.x} ${A.y} Q ${M1.x} ${M1.y} ${B.x} ${B.y} L ${C.x} ${C.y} Q ${M2.x} ${M2.y} ${D.x} ${D.y} Z" fill="url(#rg)"/>
+    <path d="M ${pivot.x} ${pivot.y} Q ${(pivot.x+crimp.x)/2+px*bow*0.8} ${(pivot.y+crimp.y)/2+py*bow*0.8} ${crimp.x} ${crimp.y}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
+    <text style="font:700 12.5px 'Helvetica Neue',Arial;letter-spacing:5px;" fill="rgba(255,255,255,.92)">
+      <textPath href="#rp" startOffset="10px">MADE OF IDEAS</textPath>
+    </text>`;
+}
+
+/* ================= 主循环 ================= */
+let prev=performance.now();
+function step(now){
+  const dt=clamp((now-prev)/1000,0,0.033);prev=now;
+  const cx=innerWidth/2;
+  const pivot={x:cx,y:-70};
+
+  if(S.drag){
+    /* 拖拽中：角度与绳长由 pointermove 直接控制，速度已记录，松手后弹簧接管 */
+  }else{
+    /* 绳长弹簧：随摆速轻微拉伸；下拉松手后在此回弹 */
+    S.ropeT=ropeBase+clamp(Math.abs(S.angV)*20,0,80);
+    const rf=(S.ropeT-S.rope)*90-S.ropeV*9;
+    S.ropeV+=rf*dt;S.rope+=S.ropeV*dt;
+
+    /* 摆动弹簧 */
+    let target=0;
+    if(S.wave) target=Math.sin(now/1000*1.15)*0.34;
+    else if(S.mouseMoved) target=(S.mx-0.5)*0.42;   /* 轻移鼠标 → 轻摆 */
+    const acc=(target-S.ang)*17-S.angV*2.4;
+    S.angV+=acc*dt;S.ang+=S.angV*dt;
+  }
+
+  /* 翻面弹簧 */
+  const ff=(S.flipT-S.flip)*95-S.flipV*11;
+  S.flipV+=ff*dt;S.flip=clamp(S.flip+S.flipV*dt,-0.15,1.15);
+
+  /* 鼠标微倾与镭射偏移（含摆动角度贡献） */
+  const tTiltY=(S.mx-0.5)*20, tTiltX=(0.5-S.my)*14;
+  S.tiltY+=(tTiltY-S.tiltY)*0.08;S.tiltX+=(tTiltX-S.tiltX)*0.08;
+  document.documentElement.style.setProperty('--hx',(50+(S.mx-0.5)*160-S.ang*45)+'%');
+  document.documentElement.style.setProperty('--shx',((S.mx-0.5)*120)+'px');
+  wm.style.setProperty('--mx',(S.mx-0.5)*-14);
+  wm.style.setProperty('--my',(S.my-0.5)*-10);
+
+  /* 挂孔位置 */
+  const holeX=pivot.x+Math.sin(S.ang)*S.rope,
+        holeY=pivot.y+Math.cos(S.ang)*S.rope;
+  /* 绳末端（扣具） */
+  const endLen=S.rope-58;
+  const crimpX=pivot.x+Math.sin(S.ang)*endLen,
+        crimpY=pivot.y+Math.cos(S.ang)*endLen;
+
+  drawRibbon(pivot,{x:crimpX,y:crimpY});
+
+  const angDeg=S.ang*180/Math.PI;
+  clip.style.transform=`translate(${crimpX-40}px,${crimpY}px) rotate(${angDeg}deg)`;
+  swing.style.transform=`translate(${holeX-150}px,${holeY-26}px) rotate(${angDeg}deg)`;
+  flip3d.style.transform=`rotateX(${S.tiltX}deg) rotateY(${S.flip*180+S.tiltY}deg)`;
+
+  /* 分层布局 */
+  const g=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'))||120;
+  $$('#explodeInner .layer').forEach(el=>{
+    const i=+el.dataset.i,off=(i-2);
+    el.style.transform=`translate3d(${off*g*1.06}px,0px,${off*g*0.52}px)`;
+  });
+}
+function loop(now){
+  requestAnimationFrame(loop);
+  try{ step(now); }catch(err){ window.__lastErr=err&&err.stack||String(err); }
+}
+requestAnimationFrame(loop);
+
+/* ================= 交互 ================= */
+addEventListener('pointermove',e=>{
+  S.mx=e.clientX/innerWidth;S.my=e.clientY/innerHeight;S.mouseMoved=true;
+  if(S.drag){
+    const cx=innerWidth/2,pivotY=-70;
+    const dx=e.clientX-cx,dy=e.clientY-pivotY;
+    const a=clamp(Math.atan2(dx,dy),-1.2,1.2);
+    /* 绳长跟随指针距离（扣除抓握点到挂孔的偏移）→ 可下拉拉长 */
+    const target=clamp(Math.hypot(dx,dy)-S.grabOff,ropeBase*0.45,ropeBase*2.1);
+    const t=performance.now();
+    const dta=S.lastT?(t-S.lastT)/1000:0;
+    if(dta>0.001){
+      S.angV=clamp((a-S.ang)/dta,-7,7);
+      S.ropeV=clamp((target-S.rope)/dta,-3200,3200);
+    }
+    S.ang=a;S.rope=target;S.ropeT=target;S.lastT=t;
+  }
+});
+
+flip3d.addEventListener('pointerdown',e=>{
+  if(document.body.classList.contains('mode-layers'))return;
+  const cx=innerWidth/2,pivotY=-70;
+  S.grabOff=clamp(Math.hypot(e.clientX-cx,e.clientY-pivotY)-S.rope,-60,340);
+  S.drag=true;S.lastT=0;S.downX=e.clientX;S.downY=e.clientY;S.downT=performance.now();
+  try{flip3d.setPointerCapture(e.pointerId);}catch(err){}
+});
+flip3d.addEventListener('pointerup',e=>{
+  if(!S.drag)return;
+  S.drag=false;
+  const moved=Math.hypot(e.clientX-S.downX,e.clientY-S.downY);
+  const held=performance.now()-S.downT;
+  if(moved<7&&held<350){S.flipT=S.flipT>0.5?0:1;S.angV*=0.4;}
+  /* 松手回摆：保留释放速度 */
+});
+flip3d.addEventListener('pointercancel',()=>S.drag=false);
+
+/* Dock */
+const themes=[
+  {'--ribbon':'#e8602e','--ribbon-dark':'#c94f22','--salmon':'#ee8265',rb:['#e8602e','#c94f22']},
+  {'--ribbon':'#c9d63c','--ribbon-dark':'#a9b52e','--salmon':'#ee8265',rb:['#c9d63c','#a9b52e']},
+  {'--ribbon':'#3c4046','--ribbon-dark':'#2b2e33','--salmon':'#ee8265',rb:['#3c4046','#2b2e33']},
+];
+$$('.dot').forEach(d=>d.addEventListener('click',()=>{
+  $$('.dot').forEach(x=>x.classList.remove('on'));d.classList.add('on');
+  const t=themes[+d.dataset.t];
+  for(const k in t){if(k!=='rb')document.documentElement.style.setProperty(k,t[k]);}
+  S.ribbon=t.rb;
+}));
+
+function setHint(t){$('#hint').textContent=t;}
+function setMode(layers){
+  document.body.classList.toggle('mode-layers',layers);
+  $('#btnLayers').classList.toggle('on',layers);
+  if(layers)setHint('移动鼠标 · 点击材质层 · Esc 合回');
+  else setHint('轻移鼠标 · 拖动回摆 · 点击翻面');
+}
+$('#btnLayers').addEventListener('click',()=>setMode(!document.body.classList.contains('mode-layers')));
+addEventListener('keydown',e=>{if(e.key==='Escape')setMode(false);});
+
+$('#btnRehang').addEventListener('click',()=>{
+  if(document.body.classList.contains('mode-layers'))return setMode(false);
+  S.rope=ropeBase*0.78;S.ropeV=120;
+  S.ang=(Math.random()>0.5?-1:1)*0.9;S.angV=0;S.flipT=0;
+});
+$('#btnWave').addEventListener('click',e=>{
+  S.wave=!S.wave;e.currentTarget.classList.toggle('on',S.wave);
+});
+$('#btnSpark').addEventListener('click',e=>{
+  S.spark=!S.spark;e.currentTarget.classList.toggle('on',S.spark);
+  document.querySelectorAll('.holoF').forEach(h=>h.style.filter=S.spark?'saturate(2) brightness(1.25)':'');
+});
+$('#btnReset').addEventListener('click',()=>{
+  S.tiltX=S.tiltY=0;S.flipT=0;S.ang=0;S.angV=0;S.wave=false;
+  $('#btnWave').classList.remove('on');
+  document.documentElement.style.setProperty('--gap','150px');$('#gapRange').value=150;$('#gapVal').textContent='150';
+});
+
+/* 分层：点击层 ↔ 面板联动 */
+const DESC=[
+  ['BACK PRINT','倒置印刷的背面版面，承载 slogan 与落款。'],
+  ['GRAPHITE CORE','2.0mm 冷石墨板，整卡的骨架与重量来源。'],
+  ['FACE PRINT','冷石墨与暖橙构成卡面，承载名称、身份和编号。'],
+  ['HOLO FOIL','字母 F 的镭射镀层，随视角变化光泽。'],
+  ['FILM','0.3mm 透明 PET 膜，贴合最外层，防刮并带来反光。'],
+];
+function selectLayer(i){
+  $$('#layerList li').forEach(li=>li.classList.toggle('on',+li.dataset.i===i));
+  $$('#explodeInner .layer').forEach(l=>{
+    l.classList.toggle('active',+l.dataset.i===i);
+    l.classList.toggle('dim',false);
+  });
+  $('#descEn').textContent=DESC[i][0];$('#descTxt').textContent=DESC[i][1];
+}
+$$('#layerList li').forEach(li=>li.addEventListener('click',()=>selectLayer(+li.dataset.i)));
+$$('#explodeInner .layer').forEach(l=>l.addEventListener('click',()=>{
+  const i=+l.dataset.i;selectLayer(i);
+  /* 把选中的层推到前面 */
+  l.parentNode.appendChild(l);
+}));
+
+$('#gapRange').addEventListener('input',e=>{
+  document.documentElement.style.setProperty('--gap',e.target.value+'px');
+  $('#gapVal').textContent=e.target.value;
+});
+selectLayer(2);
+</script>
+</body>
+</html>
